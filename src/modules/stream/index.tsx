@@ -80,8 +80,8 @@ const StreamUI: React.FC<StreamUIProps> = ({}) => {
     async function join() {
       try {
         const token = generateTestToken(
-          import.meta.env.VITE_LIVEKIT_API_KEY,
-          import.meta.env.VITE_LIVEKIT_API_SECRET,
+          "API8pGMtFmmsDES",
+          "dnyYEozEXq5se1MhdRW7tW2rKHAcjDtUxj6lhK2qH4H",
           roomCode!,
           crypto.randomUUID(),
           name || "Guest",
@@ -96,7 +96,10 @@ const StreamUI: React.FC<StreamUIProps> = ({}) => {
 
         // Connect to room
         addDebugLog(`Connecting to room: ${roomCode}`);
-        await lkRoom.connect(import.meta.env.VITE_LIVEKIT_URL, await token);
+        await lkRoom.connect(
+          "wss://livestream-demo-q1l1qptg.livekit.cloud",
+          await token
+        );
         setRoom(lkRoom);
         setIsConnected(true);
         addDebugLog(`Connected to room successfully`);
