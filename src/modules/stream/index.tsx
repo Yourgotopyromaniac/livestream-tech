@@ -423,19 +423,18 @@ const StreamUI: React.FC<StreamUIProps> = ({}) => {
             <span className="text-lg">{participantCount}</span>
           </div>
 
-          {!isConnected ? (
-            <div className="text-white text-2xl">Connecting...</div>
-          ) : (
-            <>
-              <video
-                autoPlay
-                playsInline
-                muted={isHost}
-                ref={videoRef}
-                className="w-full h-full object-cover rounded-md"
-              />
-              {!isHost && <audio autoPlay ref={audioRef} className="hidden" />}
-            </>
+          <video
+            autoPlay
+            playsInline
+            muted={isHost}
+            ref={videoRef}
+            className="w-full h-full object-cover rounded-md"
+          />
+          {!isHost && <audio autoPlay ref={audioRef} className="hidden" />}
+          {!isConnected && (
+            <div className="absolute inset-0 flex items-center justify-center text-white">
+              Connecting...
+            </div>
           )}
 
           {isHost && (
