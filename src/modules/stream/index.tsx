@@ -20,7 +20,7 @@ import {
   TrackPublication,
   RemoteParticipant,
 } from "livekit-client";
-import { ArrowUp, Bug, Wifi, WifiOff } from "lucide-react";
+import { ArrowUp } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -50,21 +50,11 @@ const StreamUI: React.FC<StreamUIProps> = ({}) => {
   const [room, setRoom] = useState<Room | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [participantCount, setParticipantCount] = useState(1);
-  const [debugMode, setDebugMode] = useState(false);
-  const [debugLogs, setDebugLogs] = useState<string[]>([]);
 
   // Store remote audio tracks for mute control
   const [_remoteAudioTracks, setRemoteAudioTracks] = useState<
     Set<RemoteAudioTrack>
   >(new Set());
-
-  // Add debug log
-  const addDebugLog = (message: string) => {
-    if (debugMode) {
-      const timestamp = new Date().toLocaleTimeString();
-      setDebugLogs((prev) => [...prev, `${timestamp}: ${message}`].slice(-50)); // Keep last 50 logs
-    }
-  };
 
   // Auto-scroll chat to bottom when new messages arrive
   useEffect(() => {
@@ -80,8 +70,8 @@ const StreamUI: React.FC<StreamUIProps> = ({}) => {
     async function join() {
       try {
         const token = generateTestToken(
-          "API8pGMtFmmsDES",
-          "dnyYEozEXq5se1MhdRW7tW2rKHAcjDtUxj6lhK2qH4H",
+          import.meta.env.VITE_LIVEKIT_API_KEY,
+          import.meta.env.VITE_LIVEKIT_API_SECRET,
           roomCode!,
           crypto.randomUUID(),
           name || "Guest",
@@ -89,41 +79,30 @@ const StreamUI: React.FC<StreamUIProps> = ({}) => {
         );
 
         lkRoom = new Room();
-        addDebugLog(`Creating new room instance: ${lkRoom.name}`);
 
         // Set up event handlers before connecting
         setupRoomHandlers(lkRoom);
 
         // Connect to room
-        addDebugLog(`Connecting to room: ${roomCode}`);
-        await lkRoom.connect(
-          "wss://livestream-demo-q1l1qptg.livekit.cloud",
-          await token
-        );
+        await lkRoom.connect(import.meta.env.VITE_LIVEKIT_URL, await token);
         setRoom(lkRoom);
         setIsConnected(true);
-        addDebugLog(`Connected to room successfully`);
 
         // If host, enable camera and microphone
         if (isHost) {
           await lkRoom.localParticipant.setCameraEnabled(true);
           await lkRoom.localParticipant.setMicrophoneEnabled(true);
-          addDebugLog(`Host camera and microphone enabled`);
 
           // Display local video for host
           displayLocalVideo(lkRoom);
         }
       } catch (error) {
-        const errorMsg = `Failed to join room: ${error}`;
-        console.error(errorMsg, error);
-        addDebugLog(errorMsg);
+        console.error("Failed to join room:", error);
         toast.error("Failed to join the stream");
       }
     }
 
     function setupRoomHandlers(room: Room) {
-      addDebugLog("Setting up room event handlers");
-
       // Handle remote tracks (for viewers to see host's stream)
       room.on(
         RoomEvent.TrackSubscribed,
@@ -132,21 +111,24 @@ const StreamUI: React.FC<StreamUIProps> = ({}) => {
           _publication: TrackPublication,
           participant: RemoteParticipant
         ) => {
-          const logMsg = `Track subscribed: ${track.kind} from ${participant.identity}`;
-          console.log(logMsg);
-          addDebugLog(logMsg);
+          console.log(
+            "Track subscribed:",
+            track.kind,
+            "from",
+            participant.identity
+          );
 
           if (track.kind === "video") {
             const videoTrack = track as RemoteVideoTrack;
             if (videoRef.current) {
               videoTrack.attach(videoRef.current);
-              addDebugLog("Remote video attached");
+              console.log("Remote video attached");
             }
           } else if (track.kind === "audio") {
             const audioTrack = track as RemoteAudioTrack;
             if (audioRef.current) {
               audioTrack.attach(audioRef.current);
-              addDebugLog("Remote audio attached");
+              console.log("Remote audio attached");
 
               // Add to remote audio tracks for mute control
               setRemoteAudioTracks((prev) => new Set([...prev, audioTrack]));
@@ -158,9 +140,7 @@ const StreamUI: React.FC<StreamUIProps> = ({}) => {
       // Handle track unsubscribed
       room.on(RoomEvent.TrackUnsubscribed, (track: RemoteTrack) => {
         track.detach();
-        const logMsg = `Track unsubscribed: ${track.kind}`;
-        console.log(logMsg);
-        addDebugLog(logMsg);
+        console.log("Track unsubscribed:", track.kind);
 
         // Remove from remote audio tracks
         if (track.kind === "audio") {
@@ -174,20 +154,18 @@ const StreamUI: React.FC<StreamUIProps> = ({}) => {
 
       // Handle track muted/unmuted events
       room.on(RoomEvent.TrackMuted, (publication, participant) => {
-        const logMsg = `Track ${publication.kind} muted by ${participant.identity}`;
-        console.log(logMsg);
-        addDebugLog(logMsg);
-
+        console.log(
+          `Track ${publication.kind} muted by ${participant.identity}`
+        );
         if (publication.kind === "audio" && audioRef.current) {
           audioRef.current.muted = true;
         }
       });
 
       room.on(RoomEvent.TrackUnmuted, (publication, participant) => {
-        const logMsg = `Track ${publication.kind} unmuted by ${participant.identity}`;
-        console.log(logMsg);
-        addDebugLog(logMsg);
-
+        console.log(
+          `Track ${publication.kind} unmuted by ${participant.identity}`
+        );
         if (publication.kind === "audio" && audioRef.current) {
           audioRef.current.muted = false;
         }
@@ -197,10 +175,7 @@ const StreamUI: React.FC<StreamUIProps> = ({}) => {
       room.on(
         RoomEvent.LocalTrackPublished,
         (publication: TrackPublication) => {
-          const logMsg = `Local track published: ${publication.kind}`;
-          console.log(logMsg);
-          addDebugLog(logMsg);
-
+          console.log("Local track published:", publication.kind);
           if (isHost && publication.kind === "video") {
             displayLocalVideo(room);
           }
@@ -209,12 +184,8 @@ const StreamUI: React.FC<StreamUIProps> = ({}) => {
 
       // Handle participant connections
       room.on(RoomEvent.ParticipantConnected, (participant) => {
-        const logMsg = `Participant connected: ${participant.identity}`;
-        console.log(logMsg);
-        addDebugLog(logMsg);
-
+        console.log("Participant connected:", participant.identity);
         setParticipantCount(room.numParticipants);
-        addDebugLog(`Participant count: ${room.numParticipants}`);
 
         // Subscribe to existing tracks
         participant.trackPublications.forEach((publication) => {
@@ -231,69 +202,50 @@ const StreamUI: React.FC<StreamUIProps> = ({}) => {
       });
 
       room.on(RoomEvent.ParticipantDisconnected, (participant) => {
-        const logMsg = `Participant disconnected: ${participant.identity}`;
-        console.log(logMsg);
-        addDebugLog(logMsg);
-
+        console.log("Participant disconnected:", participant.identity);
         setParticipantCount(room.numParticipants);
-        addDebugLog(`Participant count: ${room.numParticipants}`);
       });
 
       // Handle room connection
       room.on(RoomEvent.Connected, () => {
-        const logMsg = "Connected to room";
-        console.log(logMsg);
-        addDebugLog(logMsg);
-
+        console.log("Connected to room");
         setParticipantCount(room.numParticipants);
-        addDebugLog(`Participant count: ${room.numParticipants}`);
       });
 
-      // Handle incoming chat messages - FIXED VERSION
-      room.on(
-        RoomEvent.DataReceived,
-        (payload: Uint8Array, _participant?: RemoteParticipant) => {
-          try {
-            const decoder = new TextDecoder();
-            const decoded = decoder.decode(payload);
-            addDebugLog(`Raw data received: ${decoded}`);
+      // Handle incoming chat messages
+      room.on(RoomEvent.DataReceived, (payload: Uint8Array) => {
+        try {
+          const decoder = new TextDecoder();
+          const messageData = JSON.parse(decoder.decode(payload));
 
-            const messageData = JSON.parse(decoded);
+          if (messageData.type === "chat") {
+            // Check if this message is from the current user
+            const isFromCurrentUser =
+              messageData.senderIdentity === room.localParticipant.identity;
 
-            if (messageData.type === "chat") {
-              // Check if this message is from the current user
-              const isFromCurrentUser =
-                messageData.senderIdentity === room.localParticipant.identity;
-
+            // Only add the message if it's not from the current user
+            // (current user messages are added optimistically in sendChatMessage)
+            if (!isFromCurrentUser) {
               const newChatMessage: ChatMessage = {
                 id: messageData.id,
                 senderName: messageData.senderName,
                 senderIdentity: messageData.senderIdentity,
                 message: messageData.message,
                 timestamp: new Date(messageData.timestamp),
-                isFromCurrentUser,
+                isFromCurrentUser: false,
               };
 
-              addDebugLog(
-                `Received chat message from ${messageData.senderName} (${messageData.senderIdentity}): ${messageData.message}`
-              );
               setChatMessages((prev) => [...prev, newChatMessage]);
-            } else {
-              addDebugLog(`Received non-chat data: ${decoded}`);
+              console.log("Received chat message:", newChatMessage);
             }
-          } catch (error) {
-            const errorMsg = `Failed to parse incoming message: ${error}`;
-            console.error(errorMsg, error);
-            addDebugLog(errorMsg);
           }
+        } catch (error) {
+          console.error("Failed to parse incoming message:", error);
         }
-      );
+      });
 
       room.on(RoomEvent.Disconnected, () => {
-        const logMsg = "Disconnected from room";
-        console.log(logMsg);
-        addDebugLog(logMsg);
-
+        console.log("Disconnected from room");
         setIsConnected(false);
       });
     }
@@ -311,7 +263,7 @@ const StreamUI: React.FC<StreamUIProps> = ({}) => {
         }
 
         localVideoTrack.attach(videoRef.current);
-        addDebugLog("Local video attached for host");
+        console.log("Local video attached for host");
       }
     }
 
@@ -320,7 +272,6 @@ const StreamUI: React.FC<StreamUIProps> = ({}) => {
     // Cleanup function
     return () => {
       if (lkRoom) {
-        addDebugLog("Cleaning up room connection");
         lkRoom.removeAllListeners();
 
         lkRoom.remoteParticipants.forEach((participant) => {
@@ -368,23 +319,20 @@ const StreamUI: React.FC<StreamUIProps> = ({}) => {
 
     try {
       setChatMessages((prev) => [...prev, localMessage]);
-      addDebugLog(`Optimistically added message: ${newMessage.trim()}`);
 
       // Send message to other participants (including reliable delivery)
       const encoder = new TextEncoder();
       const data = encoder.encode(JSON.stringify(messageData));
 
-      addDebugLog(`Publishing data to room: ${JSON.stringify(messageData)}`);
       await room.localParticipant.publishData(data, {
-        reliable: true,
+        reliable: true, // Ensure message delivery
+        destinationIdentities: [], // Send to all participants
       });
 
       setNewMessage("");
-      addDebugLog("Chat message sent successfully");
+      console.log("Chat message sent:", messageData);
     } catch (error) {
-      const errorMsg = `Failed to send chat message: ${error}`;
-      console.error(errorMsg, error);
-      addDebugLog(errorMsg);
+      console.error("Failed to send chat message:", error);
       toast.error("Failed to send message");
 
       // Remove the optimistically added message on failure
@@ -416,13 +364,9 @@ const StreamUI: React.FC<StreamUIProps> = ({}) => {
         audioRef.current.muted = newMutedState;
       }
 
-      const logMsg = `Host ${newMutedState ? "muted" : "unmuted"} microphone`;
-      console.log(logMsg);
-      addDebugLog(logMsg);
+      console.log(`Host ${newMutedState ? "muted" : "unmuted"} microphone`);
     } catch (error) {
-      const errorMsg = `Failed to toggle mute: ${error}`;
-      console.error(errorMsg, error);
-      addDebugLog(errorMsg);
+      console.error("Failed to toggle mute:", error);
       // Revert state on error
       setIsMuted(!isMuted);
       toast.error("Failed to toggle mute");
@@ -440,52 +384,31 @@ const StreamUI: React.FC<StreamUIProps> = ({}) => {
 
   return (
     <div className="bg-[#101010] w-screen h-screen p-6 py-0 gap-4 flex flex-col items-center justify-center">
-      <div className="w-full flex items-center justify-between gap-4">
-        <div className="flex items-center gap-2">
-          {isConnected ? (
-            <Wifi className="h-5 w-5 text-green-500" />
-          ) : (
-            <WifiOff className="h-5 w-5 text-red-500" />
-          )}
-          <span className="text-white text-sm">
-            {isConnected ? "Connected" : "Disconnected"}
-          </span>
-          <Button
-            size="sm"
-            variant="outline"
-            className="bg-transparent border border-gray-600 hover:bg-foreground"
-            onClick={() => setDebugMode(!debugMode)}
-          >
-            <Bug className="h-4 w-4 text-white" />
-          </Button>
-        </div>
-
-        <div className="flex items-center gap-4">
-          <Button
-            variant="outline"
-            className="bg-transparent items-center gap-2 border border-gray-600 hover:bg-foreground"
-            onClick={() => {
-              navigator.clipboard.writeText(roomCode || "");
-              toast("Room code copied!");
-            }}
-          >
-            <span children={roomCode} className="text-white" />
-            <IconCopy color="white" size={20} />
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            className="bg-transparent border border-gray-600 hover:bg-foreground"
-            onClick={() => {
-              if (room) {
-                room.disconnect();
-              }
-              window.location.href = "/";
-            }}
-          >
-            <IconLogout color="white" size={20} />
-          </Button>
-        </div>
+      <div className="w-full flex items-center justify-end gap-4">
+        <Button
+          variant="outline"
+          className="bg-transparent items-center gap-2 border border-gray-600 hover:bg-foreground"
+          onClick={() => {
+            navigator.clipboard.writeText(roomCode || "");
+            toast("Room code copied!");
+          }}
+        >
+          <span children={roomCode} className="text-white" />
+          <IconCopy color="white" size={20} />
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          className="bg-transparent border border-gray-600 hover:bg-foreground"
+          onClick={() => {
+            if (room) {
+              room.disconnect();
+            }
+            window.location.href = "/";
+          }}
+        >
+          <IconLogout color="white" size={20} />
+        </Button>
       </div>
 
       <div className="w-full flex lg:flex-row flex-col items-center justify-between lg:h-[80%] h-[90%]">
@@ -634,27 +557,6 @@ const StreamUI: React.FC<StreamUIProps> = ({}) => {
           </div>
         </div>
       </div>
-
-      {/* Debug Panel */}
-      {debugMode && (
-        <div className="absolute bottom-4 left-4 w-1/3 h-1/3 bg-black bg-opacity-80 border border-gray-600 rounded-md p-4 overflow-auto">
-          <div className="text-white font-bold mb-2">Debug Logs</div>
-          <div className="text-gray-300 text-xs font-mono">
-            {debugLogs.length === 0 ? (
-              <div>No debug logs yet. Interactions will appear here.</div>
-            ) : (
-              debugLogs.map((log, index) => (
-                <div key={index} className="mb-1">
-                  {log}
-                </div>
-              ))
-            )}
-          </div>
-          <Button size="sm" className="mt-2" onClick={() => setDebugLogs([])}>
-            Clear Logs
-          </Button>
-        </div>
-      )}
     </div>
   );
 };
